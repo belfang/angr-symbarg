@@ -10,19 +10,16 @@ import angr, claripy, time, sys, os
 # automatically authenticated.
 
 
-# Potential interface:  ptyhon_test.py /bin/echo 10 4
-
-
+# example use:
 # workon ang 
 # python edit.py /bin/echo 2 10 7
 
 def basic_symbolic_execution():
+	
+    #for timeout
     start_time = time.time()
 
-    # We can use this as a basic demonstration of using angr for symbolic
-    # execution. First, we load the binary into an angr project.
-
-    print len(sys.argv)
+    #print len(sys.argv)
 
     #create list of input from command line
     commandLine = list()
@@ -61,7 +58,7 @@ def basic_symbolic_execution():
 	arguments.append(d["arg{0}".format(j-2)])
 	j = j+1
  
-    state = p.factory.entry_state(args=arguments) #is this using the keys or the values?
+    state = p.factory.entry_state(args=arguments) 
 
 
     # Now, in order to manage the symbolic execution process from a very high
