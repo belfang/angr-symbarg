@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<crete>
+
+
+
+	<exec>./test</exec>
+	<args>
+
+
+		<arg index="1" size="" value="-l" concolic="false"/>
+
+	     
+	</args>
+	<files>
+		<file path="./input1" size="300" concolic="true"/>
+
+
+                <file path ="./input2" size="300" concolic="true"/> 	
+	</files>
+	<stdin size="30" value="" concolic="true"/>
+</crete>
+
+
