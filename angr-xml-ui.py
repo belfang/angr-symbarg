@@ -149,6 +149,16 @@ def exec_angr(target_exe, dic_args, list_files, stdin_size):
 
     return sm
 
+def get_simfile_content(s, file_path):
+    fd = s.posix.filename_to_fd(file_path)
+    if(fd == None):
+        print "No fd found, use dump_file_by_path(): " + file_path
+        return s.posix.dump_file_by_path(file_path)
+    else:
+        print "fd found \'" + str(fd) + "\': " + file_path
+        return s.posix.dumps(fd)
+
+
 def get_test_case(s, dic_args, list_files, stdin_size):
     print "--------------"
     print "get_test_case:"
@@ -158,25 +168,15 @@ def get_test_case(s, dic_args, list_files, stdin_size):
         if not isinstance(v, claripy.ast.Bits):
             continue
         concrete_value = s.solver.any_str(v)
-        # concrete_value = s.solver.any_int(v)
         print k + ": " + str(concrete_value)
 
     for f in list_files:
         file_path = f[0]
-        concrete_value = s.posix.dump_file_by_path(file_path)
-        # fd = s.posix.filename_to_fd(file_path)
-        # if(fd == None):
-        #     concrete_value = ''
-        # else:
-        #     print "fd = " + str(fd)
-        #     concrete_value = s.posix.dumps(fd)
-
+        concrete_value = get_simfile_content(s, file_path)
         print file_path + ": " + concrete_value + ", " + str(len(concrete_value))
 
     if not stdin_size == 0:
-        fd = s.posix.filename_to_fd("/dev/stdin")
-        stdin_content = s.posix.dumps(fd)
-        # stdin_content = s.posix.dump_file_by_path("/dev/stdin")
+        stdin_content = get_simfile_content(s, "/dev/stdin")
         print "stdin_content: " + stdin_content + ", " + str(len(stdin_content))
 
 def collect_angr_result(sm, dic_args, list_files, stdin_size):
