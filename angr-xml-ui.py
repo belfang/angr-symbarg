@@ -8,11 +8,13 @@ TIMEOUT = 7
 result_dir = os.path.join(os.getcwd(), "angr-out-" + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
 
 def check_argv(argv):
-    if not len(argv) == 2:
+    if len(argv) < 2:
         print "[ERROR] Only exact one argument is valid!"
         sys.exit()
+    return 
 
-    xml_path = argv[1]
+def check_path(path):
+    xml_path = path
 
     if not os.path.isfile(xml_path):
         print "[ERROR] input file \'" + xml_path + "\' does not exist!"
@@ -255,7 +257,7 @@ def get_test_case(s, dic_args, list_files, stdin_size, count):
     output.write(struct.pack("i", elem_count))
 
 
-def collect_angr_result(sm, dic_args, list_files, stdin_size):
+def collect_angr_result(sm, dic_args, list_files, stdin_size, argv):
     print "==================="
     print "collect_angr_result"
     print "==================="
@@ -263,42 +265,55 @@ def collect_angr_result(sm, dic_args, list_files, stdin_size):
     print "deadended: " + str(len(sm.deadended))
     print "active: " + str(len(sm.active))
 
-    os.makedirs(result_dir)
-    os.chdir(result_dir)
+    os.makedirs(argv+"-dir")
+    os.chdir(argv+"-dir")
     tc_count = 0
 
     for s in sm.deadended:
-        tc_count = tc_count + 1
-        get_test_case(s, dic_args, list_files, stdin_size, tc_count)
+	tc_count = tc_count + 1
+	get_test_case(s, dic_args, list_files, stdin_size, tc_count)
 
     for s in sm.active:
-        tc_count = tc_count + 1
-        get_test_case(s, dic_args, list_files, stdin_size, tc_count)
+	tc_count = tc_count + 1
+	get_test_case(s, dic_args, list_files, stdin_size, tc_count)
+
+    os.chdir("../")
 
 def angr_xml_ui(argv):
-    input_xml = check_argv(argv)
-    parsed_xml = minidom.parse(input_xml)
+    check = check_argv(argv)
 
-    dic_args  = {}
+    os.makedirs(result_dir)
+    i = 1
+    while (i <  len(argv)):
+        input_xml = check_path(argv[i])
+        parsed_xml = minidom.parse(input_xml)
 
-    ## 1. parse target executable
-    target_exe = parse_xml_exe(parsed_xml)
-    dic_args["argv_0"] = str(target_exe)
+        dic_args  = {}
 
-    ## 2. parse xml arguments
-    dic_args = parse_xml_argv(parsed_xml, dic_args)
+        ## 1. parse target executable
+        target_exe = parse_xml_exe(parsed_xml)
+        dic_args["argv_0"] = str(target_exe)
 
-    ## 3. parse xml files
-    list_files = parse_xml_file(parsed_xml)
+        ## 2. parse xml arguments
+        dic_args = parse_xml_argv(parsed_xml, dic_args)
 
-    ## 4. parse xml stdin
-    stdin_size = parse_xml_stdin(parsed_xml)
+        ## 3. parse xml files
+        list_files = parse_xml_file(parsed_xml)
 
-    ## 5. start angr with parsed args, files and stdin
-    sm = exec_angr(target_exe, dic_args, list_files, stdin_size)
+        ## 4. parse xml stdin
+        stdin_size = parse_xml_stdin(parsed_xml)
 
-    ## 6. collect angr's result
-    collect_angr_result(sm, dic_args, list_files, stdin_size)
+        ## 5. start angr with parsed args, files and stdin
+        sm = exec_angr(target_exe, dic_args, list_files, stdin_size)
+
+    	os.chdir(result_dir)
+
+        ## 6. collect angr's result
+        collect_angr_result(sm, dic_args, list_files, stdin_size, argv[i])
+
+    	os.chdir("../")
+
+        i = i+1
 
     return
 
