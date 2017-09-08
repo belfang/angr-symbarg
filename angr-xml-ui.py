@@ -159,25 +159,88 @@ def get_simfile_content(s, file_path):
         return s.posix.dumps(fd)
 
 
-def get_test_case(s, dic_args, list_files, stdin_size):
+def get_test_case(s, dic_args, list_files, stdin_size, count):
     print "--------------"
     print "get_test_case:"
     print "--------------"
+
+    output = open("{}.bin".format(str(count)), "wb")
 
     for k,v in dic_args.iteritems():
         if not isinstance(v, claripy.ast.Bits):
             continue
         concrete_value = s.solver.any_str(v)
-        print k + ": " + str(concrete_value)
+        # print k + ": " + str(concrete_value)
+
+	#4B for the size of the arg name
+        output.write(struct.pack("i", len(k)))
+
+	#name
+	output.write(str(k))
+
+	#4B for size of value
+        output.write(struct.pack("i", len(concrete_value)))
+
+	#value
+        output.write(str(concrete_value))
+
 
     for f in list_files:
         file_path = f[0]
+        file_size = f[1]
         concrete_value = get_simfile_content(s, file_path)
         print file_path + ": " + concrete_value + ", " + str(len(concrete_value))
+
+	#4B for the size of the file name
+        output.write(struct.pack("i", len(file_path)))
+
+	#name
+	output.write(str(file_path))
+
+	#4B for size of value
+	output.write(struct.pack("i", file_size))
+
+	#check if the string is longer than the file size, if so only take the first file_size bytes
+	if (len(concrete_value) > file_size):
+            strip = len(concrete_value) - file_size
+            #output.write(concrete_value)
+            concrete_value = concrete_value[:-strip]
+            print str(len(concrete_value))
+
+	#write value
+        output.write(concrete_value)
+
+	#if string is shorter than the file size, fill the byte difference with 00
+	if (len(concrete_value) < file_size):
+            amount = file_size - len(concrete_value)
+	    output.write(b'\x00' * amount)
+
 
     if not stdin_size == 0:
         stdin_content = get_simfile_content(s, "/dev/stdin")
         print "stdin_content: " + stdin_content + ", " + str(len(stdin_content))
+
+	#4B for the size of the name
+        output.write(struct.pack("i", len("stdin_content")))
+
+	#name
+	output.write("stdin_content")
+
+	#4B for size of value
+	output.write(struct.pack("i", stdin_size))
+
+	#check if the string is longer than the file size, if so only take the first stdin_size bytes
+	if (len(stdin_content) > stdin_size):
+            strip = len(stdin_content) - stdin_size
+            stdin_content = stdin_content[:-strip]
+
+        #write value
+        output.write(stdin_content)
+
+	#if string is shorter than the stdin size, fill the byte difference with 00
+	if (len(stdin_content) < file_size):
+            amount = stdin_size - len(stdin_content)
+	    output.write(b'\x00' * amount)
 
 def collect_angr_result(sm, dic_args, list_files, stdin_size):
     print "==================="
