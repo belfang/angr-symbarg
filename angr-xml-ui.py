@@ -270,12 +270,12 @@ def collect_angr_result(sm, dic_args, list_files, stdin_size, argv):
     tc_count = 0
 
     for s in sm.deadended:
-	tc_count = tc_count + 1
-	get_test_case(s, dic_args, list_files, stdin_size, tc_count)
+        tc_count = tc_count + 1
+        get_test_case(s, dic_args, list_files, stdin_size, tc_count)
 
     for s in sm.active:
-	tc_count = tc_count + 1
-	get_test_case(s, dic_args, list_files, stdin_size, tc_count)
+        tc_count = tc_count + 1
+        get_test_case(s, dic_args, list_files, stdin_size, tc_count)
 
     os.chdir("../")
 
@@ -287,7 +287,7 @@ def angr_xml_ui(argv):
     while (i <  len(argv)):
         input_xml = check_path(argv[i])
         parsed_xml = minidom.parse(input_xml)
-
+   
         dic_args  = {}
 
         ## 1. parse target executable
