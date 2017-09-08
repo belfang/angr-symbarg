@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
 import angr, claripy, time, sys, os, simuvex
-import ntpath
+import os, datetime, ntpath, struct
 from xml.dom import minidom
 
 TIMEOUT = 7
+result_dir = os.path.join(os.getcwd(), "angr-out-" + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
 
 def check_argv(argv):
     if not len(argv) == 2:
@@ -43,9 +44,9 @@ def parse_xml_argv(parsed_xml, dic_args):
         concolic = s.attributes['concolic'].value
 
 	if concolic == "true":
-	    dic_args["arg_{0}".format(index)] = claripy.BVS("arg_{0}".format(index), size*8)
+	    dic_args["argv_{0}".format(index)] = claripy.BVS("argv_{0}".format(index), size*8)
 	else:
-	    dic_args["arg_{0}".format(index)] = value
+	    dic_args["argv_{0}".format(index)] = value
 
     for k,v in dic_args.iteritems():
         if isinstance(v, str):
@@ -109,7 +110,7 @@ def exec_angr(target_exe, dic_args, list_files, stdin_size):
     ## prepare arguments
     arguments=list()
     for i in range(0, len(dic_args)):
-        key = "arg_{0}".format(i)
+        key = "argv_{0}".format(i)
         if not key in dic_args:
             print "[ERROR] incomplete argv list from xml: \'" + key + "\' not found"
             sys.exit()
@@ -165,12 +166,16 @@ def get_test_case(s, dic_args, list_files, stdin_size, count):
     print "--------------"
 
     output = open("{}.bin".format(str(count)), "wb")
+    elem_count = 0
+
+    output.write(struct.pack("i", 0))
 
     for k,v in dic_args.iteritems():
         if not isinstance(v, claripy.ast.Bits):
             continue
+
+        elem_count = elem_count + 1
         concrete_value = s.solver.any_str(v)
-        # print k + ": " + str(concrete_value)
 
 	#4B for the size of the arg name
         output.write(struct.pack("i", len(k)))
@@ -186,16 +191,19 @@ def get_test_case(s, dic_args, list_files, stdin_size, count):
 
 
     for f in list_files:
+        elem_count = elem_count + 1
+
         file_path = f[0]
         file_size = f[1]
         concrete_value = get_simfile_content(s, file_path)
-        print file_path + ": " + concrete_value + ", " + str(len(concrete_value))
+        # print file_path + ": " + concrete_value + ", " + str(len(concrete_value))
+
+        filename = str(ntpath.basename(file_path))
 
 	#4B for the size of the file name
-        output.write(struct.pack("i", len(file_path)))
-
+        output.write(struct.pack("i", len(filename)))
 	#name
-	output.write(str(file_path))
+	output.write(filename)
 
 	#4B for size of value
 	output.write(struct.pack("i", file_size))
@@ -205,7 +213,7 @@ def get_test_case(s, dic_args, list_files, stdin_size, count):
             strip = len(concrete_value) - file_size
             #output.write(concrete_value)
             concrete_value = concrete_value[:-strip]
-            print str(len(concrete_value))
+            # print str(len(concrete_value))
 
 	#write value
         output.write(concrete_value)
@@ -217,14 +225,15 @@ def get_test_case(s, dic_args, list_files, stdin_size, count):
 
 
     if not stdin_size == 0:
+        elem_count = elem_count + 1
         stdin_content = get_simfile_content(s, "/dev/stdin")
-        print "stdin_content: " + stdin_content + ", " + str(len(stdin_content))
+        # print "stdin_content: " + stdin_content + ", " + str(len(stdin_content))
 
 	#4B for the size of the name
-        output.write(struct.pack("i", len("stdin_content")))
+        output.write(struct.pack("i", len("crete-stdin")))
 
 	#name
-	output.write("stdin_content")
+	output.write("crete-stdin")
 
 	#4B for size of value
 	output.write(struct.pack("i", stdin_size))
@@ -238,9 +247,13 @@ def get_test_case(s, dic_args, list_files, stdin_size, count):
         output.write(stdin_content)
 
 	#if string is shorter than the stdin size, fill the byte difference with 00
-	if (len(stdin_content) < file_size):
+	if (len(stdin_content) < stdin_size):
             amount = stdin_size - len(stdin_content)
 	    output.write(b'\x00' * amount)
+
+    output.seek(0)
+    output.write(struct.pack("i", elem_count))
+
 
 def collect_angr_result(sm, dic_args, list_files, stdin_size):
     print "==================="
@@ -250,11 +263,17 @@ def collect_angr_result(sm, dic_args, list_files, stdin_size):
     print "deadended: " + str(len(sm.deadended))
     print "active: " + str(len(sm.active))
 
+    os.makedirs(result_dir)
+    os.chdir(result_dir)
+    tc_count = 0
+
     for s in sm.deadended:
-        get_test_case(s, dic_args, list_files, stdin_size)
+        tc_count = tc_count + 1
+        get_test_case(s, dic_args, list_files, stdin_size, tc_count)
 
     for s in sm.active:
-        get_test_case(s, dic_args, list_files, stdin_size)
+        tc_count = tc_count + 1
+        get_test_case(s, dic_args, list_files, stdin_size, tc_count)
 
 def angr_xml_ui(argv):
     input_xml = check_argv(argv)
@@ -264,7 +283,7 @@ def angr_xml_ui(argv):
 
     ## 1. parse target executable
     target_exe = parse_xml_exe(parsed_xml)
-    dic_args["arg_0"] = str(target_exe)
+    dic_args["argv_0"] = str(target_exe)
 
     ## 2. parse xml arguments
     dic_args = parse_xml_argv(parsed_xml, dic_args)
