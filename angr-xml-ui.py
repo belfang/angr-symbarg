@@ -1,21 +1,39 @@
 #!/usr/bin/env python
 
 import angr, claripy, time, sys, os, simuvex
-import os, datetime, ntpath, struct
+import os, datetime, ntpath, struct, shutil
 from xml.dom import minidom
 
 TIMEOUT = 7
 result_dir = os.path.join(os.getcwd(), "angr-out-" + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
 
 def check_argv(argv):
-    if not len(argv) == 2:
-        print "[ERROR] Only exact one argument is valid!"
-        sys.exit()
+    xml_path = list()
 
-    xml_path = argv[1]
+    if len(argv) == 2:
+        input_xml = argv[1]
+        if not os.path.isfile(input_xml):
+            print "[ERROR] input file \'" + input_xml + "\' does not exist!"
+            sys.exit()
 
-    if not os.path.isfile(xml_path):
-        print "[ERROR] input file \'" + xml_path + "\' does not exist!"
+        xml_path.append(input_xml)
+
+    elif (len(argv) == 3) and (argv[1] == '-b'):
+        input_folder = os.path.abspath(argv[2])
+        if not os.path.isdir(input_folder):
+            print "[ERROR] Invalid input folder for batch mode:  \'" + input_folder + "\'!"
+            sys.exit()
+
+        for f in os.listdir(input_folder):
+            if f.endswith('.xml'):
+                serialize_file_path = os.path.join(input_folder, (f + '.serialized'))
+                if not os.path.isfile(serialize_file_path):
+                    print "[Warning] \'" + f + "\' does not have corresponding \'.serialized\'"
+                    continue
+                xml_path.append(os.path.join(input_folder, f))
+
+    else:
+        print "[ERROR] Invalid argument!"
         sys.exit()
 
     return xml_path
@@ -255,6 +273,22 @@ def get_test_case(s, dic_args, list_files, stdin_size, count):
     output.write(struct.pack("i", elem_count))
 
 
+def setup_crete_out_folder(input_xml):
+    output_folder = os.path.join(result_dir, ntpath.basename(input_xml))
+    os.makedirs(output_folder)
+
+    ## copy serialized xml to the correct place
+    guest_config_folder = os.path.join(output_folder, "guest-data")
+    os.makedirs(guest_config_folder)
+    serialized_xml = str(input_xml) + ".serialized"
+    # print "copy " + serialized_xml + " to " + os.path.join(guest_config_folder, "crete-guest-config.serialized")
+    shutil.copyfile(serialized_xml, os.path.join(guest_config_folder, "crete-guest-config.serialized"))
+
+    tc_folder = os.path.join(output_folder, "test-case-parsed")
+    os.makedirs(tc_folder)
+    os.chdir(tc_folder)
+
+
 def collect_angr_result(sm, dic_args, list_files, stdin_size):
     print "==================="
     print "collect_angr_result"
@@ -263,8 +297,6 @@ def collect_angr_result(sm, dic_args, list_files, stdin_size):
     print "deadended: " + str(len(sm.deadended))
     print "active: " + str(len(sm.active))
 
-    os.makedirs(result_dir)
-    os.chdir(result_dir)
     tc_count = 0
 
     for s in sm.deadended:
@@ -275,8 +307,7 @@ def collect_angr_result(sm, dic_args, list_files, stdin_size):
         tc_count = tc_count + 1
         get_test_case(s, dic_args, list_files, stdin_size, tc_count)
 
-def angr_xml_ui(argv):
-    input_xml = check_argv(argv)
+def run_angr_with_xml(input_xml):
     parsed_xml = minidom.parse(input_xml)
 
     dic_args  = {}
@@ -298,9 +329,16 @@ def angr_xml_ui(argv):
     sm = exec_angr(target_exe, dic_args, list_files, stdin_size)
 
     ## 6. collect angr's result
+    setup_crete_out_folder(input_xml)
     collect_angr_result(sm, dic_args, list_files, stdin_size)
 
     return
+
+def angr_xml_ui(argv):
+    list_xml = check_argv(argv)
+    os.makedirs(result_dir)
+    for xml in list_xml:
+        run_angr_with_xml(xml)
 
 if __name__ == '__main__':
     angr_xml_ui(sys.argv)
